@@ -1,0 +1,206 @@
+﻿@model CreateEventViewModel
+@{
+    ViewData["Title"] = "Yeni Etkinlik Oluştur";
+    Layout = "~/Views/Shared/_userLayout.cshtml";
+}
+
+<div class="container">
+    <div class="row">
+        <div class="col-md-12">
+            <div class="card">
+                <div class="card-header">
+                    <h3>Yeni Etkinlik Oluştur</h3>
+                </div>
+                <div class="card-body">
+                    <form asp-action="CreateEvent" method="post">
+                        <div class="mb-3">
+                            <label asp-for="Title" class="form-label">Başlık</label>
+                            <input asp-for="Title" class="form-control" />
+                            <span asp-validation-for="Title" class="text-danger"></span>
+                        </div>
+
+                        <div class="mb-3">
+                            <label asp-for="Description" class="form-label">Açıklama</label>
+                            <textarea asp-for="Description" class="form-control" rows="3"></textarea>
+                            <span asp-validation-for="Description" class="text-danger"></span>
+                        </div>
+
+                        <div class="mb-3">
+                            <label asp-for="Location" class="form-label">Konum</label>
+                            <input asp-for="Location" class="form-control" />
+                            <span asp-validation-for="Location" class="text-danger"></span>
+                        </div>
+
+                        <div class="mb-3">
+                            <label asp-for="VotingDeadline" class="form-label">Son Oy Verme Tarihi</label>
+                            <input type="datetime-local"
+                                   asp-for="VotingDeadline"
+                                   class="form-control"
+                                   min="@DateTime.Now.ToString("yyyy-MM-ddTHH:mm")"
+                                   required />
+                            <span asp-validation-for="VotingDeadline" class="text-danger"></span>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label">Tarih Seçenekleri</label>
+                            <div id="dateOptionsContainer">
+                                @for (int i = 0; i < Model.DateTimeOptions.Count; i++)
+                                {
+                                    <div class="input-group mb-2">
+                                        <input type="datetime-local" class="form-control"
+                                               name="DateTimeOptions[@i].DateTime"
+                                               value="@Model.DateTimeOptions[i].ToString("yyyy-MM-ddTHH:mm")"
+                                               min="@DateTime.Now.ToString("yyyy-MM-ddTHH:mm")"
+                                               required />
+
+                                        <button type="button" class="btn btn-danger remove-date">
+                                            <i class="fas fa-trash"></i>
+                                        </button>
+                                    </div>
+                                }
+                            </div>
+                            <button type="button" id="addDateOption" class="btn btn-secondary">
+                                <i class="fas fa-plus"></i> Yeni Tarih Ekle
+                            </button>
+                        </div>
+
+                        <div class="mb-3">
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fas fa-save"></i> Etkinliği Oluştur
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+@section Scripts {
+    <script>
+        $(document).ready(function () {
+            let dateOptionIndex = 0;
+
+            // Geçmiş tarih kontrolü fonksiyonu
+            function validateDateInput(input) {
+                const selectedDate = new Date(input.value);
+                const now = new Date();
+                now.setHours(0, 0, 0, 0);
+
+                const selectedDateOnly = new Date(selectedDate);
+                selectedDateOnly.setHours(0, 0, 0, 0);
+
+                if (selectedDateOnly < now) {
+                    alert("Geçmiş bir tarih seçemezsiniz!");
+                    input.value = '';
+                    return false;
+                }
+                return true;
+            }
+
+            // Tarih seçenekleri validasyonu
+            function validateDateOptions() {
+                const dateValues = new Set();
+                let isValid = true;
+
+                // Sadece tarih seçenekleri container'ındaki inputları kontrol et
+                $('#dateOptionsContainer input[type="datetime-local"]').each(function () {
+                    const dateValue = $(this).val();
+
+                    // Geçmiş tarih kontrolü
+                    if (!validateDateInput(this)) {
+                        isValid = false;
+                        return false;
+                    }
+
+                    // Aynı tarih kontrolü
+                    if (dateValues.has(dateValue)) {
+                        alert("Tarih seçeneklerinde aynı tarih ve saati birden fazla kez seçemezsiniz!");
+                        isValid = false;
+                        return false;
+                    }
+                    dateValues.add(dateValue);
+                });
+
+                return isValid;
+            }
+
+            // Form submit
+            $('form').submit(function (e) {
+                e.preventDefault();
+
+                // Voting deadline için ayrı geçmiş tarih kontrolü
+                const votingDeadline = new Date($('#VotingDeadline').val());
+                const now = new Date();
+                if (votingDeadline < now) {
+                    alert("Son oy verme tarihi geçmiş bir tarih olamaz!");
+                    return false;
+                }
+
+                // Tarih seçenekleri için validasyon
+                if (!validateDateOptions()) {
+                    return false;
+                }
+
+                var formData = new FormData();
+                formData.append('Title', $('#Title').val());
+                formData.append('Description', $('#Description').val());
+                formData.append('Location', $('#Location').val());
+                formData.append('VotingDeadline', $('#VotingDeadline').val());
+
+                $('#dateOptionsContainer input[type="datetime-local"]').each(function (index) {
+                    formData.append(`DateTimeOptions[${index}]`, $(this).val());
+                });
+
+                $.ajax({
+                    url: '@Url.Action("CreateEvent", "User")',
+                    type: 'POST',
+                    data: formData,
+                    processData: false,
+                    contentType: false,
+                    success: function (response) {
+                        if (response.success) {
+                            window.location.href = response.redirectUrl;
+                        } else {
+                            alert('Etkinlik oluşturulurken hata oluştu.');
+                        }
+                    },
+                    error: function () {
+                        alert('Etkinlik oluşturulurken hata oluştu.');
+                    }
+                });
+            });
+
+            // Yeni tarih seçeneği ekleme
+            $('#addDateOption').click(function () {
+                const newDateOption = `
+                    <div class="input-group mb-2">
+                        <input type="datetime-local" class="form-control"
+                               name="DateTimeOptions[${dateOptionIndex}].DateTime" required />
+                        <button type="button" class="btn btn-danger remove-date">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </div>`;
+                $('#dateOptionsContainer').append(newDateOption);
+                dateOptionIndex++;
+            });
+
+            // Tarih seçeneği silme
+            $(document).on('click', '.remove-date', function () {
+                if ($('#dateOptionsContainer .input-group').length > 1) {
+                    $(this).closest('.input-group').remove();
+
+                    $('#dateOptionsContainer .input-group').each(function (index) {
+                        $(this).find('input[type="datetime-local"]').attr('name', `DateTimeOptions[${index}].DateTime`);
+                    });
+                } else {
+                    alert('En az bir tarih seçeneği olmalıdır!');
+                }
+            });
+
+            // Tarih değişikliği kontrolü
+            $(document).on('change', 'input[type="datetime-local"]', function () {
+                validateDateInput(this);
+            });
+        });
+    </script>
+}
